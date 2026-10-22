@@ -76,6 +76,10 @@ export class Room {
     if (p) p.connected = connected;
   }
 
+  remove(id: string) {
+    this.participants = this.participants.filter((p) => p.id !== id);
+  }
+
   vote(id: string, card: Card) {
     this.touch();
     const p = this.participants.find((p) => p.id === id)!;
@@ -131,9 +135,34 @@ export class Room {
   }
 }
 
+export const IDLE_TIMEOUT_MS = 12 * 60 * 60 * 1000;
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+
 export class RoomRegistry {
   private rooms = new Map<string, Room>();
-  constructor(private clock: Clock) {}
+  private sweepHandle: unknown;
+  constructor(private clock: Clock) {
+    this.scheduleSweep();
+  }
+
+  private scheduleSweep() {
+    this.sweepHandle = this.clock.setTimeout(() => {
+      this.sweep();
+      this.scheduleSweep();
+    }, SWEEP_INTERVAL_MS);
+  }
+
+  private sweep() {
+    for (const [id, room] of this.rooms) if (this.isIdle(room)) this.rooms.delete(id);
+  }
+
+  private isIdle(room: Room) {
+    return this.clock.now() - room.lastActivity >= IDLE_TIMEOUT_MS;
+  }
+
+  dispose() {
+    this.clock.clearTimeout(this.sweepHandle);
+  }
 
   create(): Room {
     const room = new Room(randomBytes(12).toString("base64url"), this.clock);
@@ -142,6 +171,11 @@ export class RoomRegistry {
   }
 
   get(id: string): Room | undefined {
-    return this.rooms.get(id);
+    const room = this.rooms.get(id);
+    if (room && this.isIdle(room)) {
+      this.rooms.delete(id);
+      return undefined;
+    }
+    return room;
   }
 }
