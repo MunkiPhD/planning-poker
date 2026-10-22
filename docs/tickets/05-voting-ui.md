@@ -1,6 +1,6 @@
 # T5 Voting UI
 
-Status: open
+Status: done
 Blocked by: T4
 
 Spec: docs/specs/planning-poker.md

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useRoomConnection } from "./connection";
 import { navigate } from "./nav";
+import { RoomView } from "./RoomView";
 import { getSavedName } from "./session";
 
 function JoinForm({ onJoin, error }: { onJoin: (name: string, observer: boolean) => void; error?: string }) {
@@ -35,25 +36,6 @@ function JoinForm({ onJoin, error }: { onJoin: (name: string, observer: boolean)
   );
 }
 
-/** Placeholder room view; T5 replaces <RoomView>. */
-function RoomView({ state }: { state: NonNullable<ReturnType<typeof useRoomConnection>["state"]> }) {
-  return (
-    <section className="panel">
-      <h2>Participants</h2>
-      <ul>
-        {state.participants.map((p) => (
-          <li key={p.id}>
-            {p.name}
-            {p.id === state.you ? " (you)" : ""}
-            {p.observer ? " [observer]" : ""}
-            {p.connected ? "" : " [offline]"}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 export function RoomPage({ roomId }: { roomId: string }) {
   const conn = useRoomConnection(roomId);
 
@@ -69,7 +51,7 @@ export function RoomPage({ roomId }: { roomId: string }) {
       </div>
     );
   } else if (conn.state) {
-    body = <RoomView state={conn.state} />;
+    body = <RoomView state={conn.state} vote={conn.vote} reveal={conn.reveal} newRound={conn.newRound} />;
   } else if (conn.status !== "open" || conn.rejoining) {
     body = <p className="muted">{conn.status === "reconnecting" ? "Reconnecting..." : "Connecting..."}</p>;
   } else {
@@ -77,7 +59,7 @@ export function RoomPage({ roomId }: { roomId: string }) {
   }
 
   return (
-    <main className="center">
+    <main className={conn.state ? "room-main" : "center"}>
       <div className="room">
         Room: <code>{roomId}</code>
         {conn.state && conn.status !== "open" && <span className="warn"> reconnecting...</span>}

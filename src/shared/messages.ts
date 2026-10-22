@@ -3,7 +3,7 @@
  *
  * Room creation: over the WebSocket. Any connection may send `create_room`;
  * the server replies `room_created` with a random unguessable id. The room URL
- * is `/<roomId>` on the client side. No HTTP API exists.
+ * is `/r/<roomId>` on the client side. No HTTP API exists.
  *
  * Flow: join -> server sends `joined` (own participant id) then `state`.
  * After every change the server sends each connected client its own, privacy
