@@ -1,6 +1,6 @@
 # T2 Room server core
 
-Status: open
+Status: done
 Blocked by: T1
 
 Spec: docs/specs/planning-poker.md

@@ -83,7 +83,7 @@ async function joinAs(roomId: string, name: string, observer = false, token = na
 /** Joins voters, votes, and reveals from the first. */
 async function roundWith(votes: (Card | null)[], opts?: { observer?: boolean }) {
   const room = await newRoom();
-  const players = [];
+  const players: Awaited<ReturnType<typeof joinAs>>[] = [];
   for (let i = 0; i < votes.length; i++) players.push(await joinAs(room, `p${i}`));
   const obs = opts?.observer ? await joinAs(room, "obs", true) : undefined;
   votes.forEach((v, i) => v !== null && players[i].c.send({ type: "vote", card: v }));

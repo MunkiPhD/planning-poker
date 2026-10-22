@@ -26,7 +26,7 @@ export class RoomError extends Error {
 const SEQ = [1, 2, 3, 5, 8, 13];
 
 export function computeResult(votes: Card[]): RoundResult {
-  const idx = votes.filter((v): v is number => v !== "coffee").map((n) => SEQ.indexOf(n));
+  const idx = votes.flatMap((v) => (v === "coffee" ? [] : [SEQ.indexOf(v)]));
   if (!idx.length) return { kind: "discuss" };
   const lo = Math.min(...idx);
   const hi = Math.max(...idx);
