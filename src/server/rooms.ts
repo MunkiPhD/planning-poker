@@ -173,6 +173,13 @@ export class RoomRegistry {
     return this.clock.now() - room.lastActivity >= IDLE_TIMEOUT_MS;
   }
 
+  /** True if any room had activity (join, vote, reveal, new round) within the last `ms`. */
+  hasActivityWithin(ms: number): boolean {
+    const now = this.clock.now();
+    for (const room of this.rooms.values()) if (now - room.lastActivity < ms) return true;
+    return false;
+  }
+
   dispose() {
     this.clock.clearTimeout(this.sweepHandle);
   }

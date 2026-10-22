@@ -44,7 +44,7 @@ The server reads the `PORT` environment variable (default 3000).
 
 Built for a single instance, because room state is in memory.
 
-- **Render (free tier):** create a Web Service from this repo with the Docker runtime. Render sets `PORT`. Free services sleep after about 15 idle minutes and lose their rooms, so open the link a few minutes before the meeting.
+- **Render (free tier):** create a Web Service from this repo with the Docker runtime. Render sets `PORT`. Free services sleep after about 15 idle minutes and lose their rooms, so open the link a few minutes before the meeting. While a room has had activity (join, vote, reveal, new round) in the last 4 hours, the server pings its own `/healthz` every 10 minutes (using Render's `RENDER_EXTERNAL_URL`) to keep the service awake. After 4 idle hours the pings stop and Render can sleep it. The limits are in `src/server/keepalive.ts`.
 - **Google Cloud Run:** use `--max-instances=1`, and raise `--timeout` for long WebSocket sessions.
 
 ## Code layout

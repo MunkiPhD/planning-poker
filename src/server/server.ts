@@ -14,6 +14,8 @@ export interface ServerOptions {
 
 export interface RunningServer {
   httpServer: Server;
+  /** True if any room had activity within the last `ms`. */
+  hasActivityWithin(ms: number): boolean;
   close(): Promise<void>;
 }
 
@@ -34,6 +36,10 @@ export const MAX_ROOMS_PER_CONNECTION = 10;
 export function startServer({ port, staticDir, clock = realClock }: ServerOptions): Promise<RunningServer> {
   const httpServer = createServer(async (req, res) => {
     const path = new URL(req.url ?? "/", "http://x").pathname;
+    if (path === "/healthz") {
+      res.writeHead(200, { "content-type": "text/plain" }).end("ok");
+      return;
+    }
     const rel = normalize(path === "/" ? "/index.html" : path);
     if (rel.includes("..")) {
       res.writeHead(400).end();
@@ -157,6 +163,7 @@ export function startServer({ port, staticDir, clock = realClock }: ServerOption
     httpServer.listen(port, () =>
       resolve({
         httpServer,
+        hasActivityWithin: (ms) => registry.hasActivityWithin(ms),
         close: () =>
           new Promise<void>((done) => {
             registry.dispose();
