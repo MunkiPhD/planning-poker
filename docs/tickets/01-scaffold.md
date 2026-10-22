@@ -1,6 +1,6 @@
 # T1 Scaffold
 
-Status: open
+Status: done
 Blocked by: none
 
 Spec: docs/specs/planning-poker.md
