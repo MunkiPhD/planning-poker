@@ -1,6 +1,6 @@
 # T6 Reveal UI
 
-Status: open
+Status: done
 Blocked by: T5
 
 Spec: docs/specs/planning-poker.md

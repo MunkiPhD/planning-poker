@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DECK, type Card, type RoomState } from "../shared/messages";
 import type { RoomConnection } from "./connection";
+import { revealView } from "./reveal";
 import { cardLabel, roomUrl, rosterStatus } from "./roster";
 
 type Props = Pick<RoomConnection, "vote" | "reveal" | "newRound"> & { state: RoomState };
@@ -93,17 +94,38 @@ function VotingStage({ state, vote, reveal }: Props) {
   );
 }
 
-/** T6 replaces this slot with the revealed result view. */
 export function Revealed({ state, newRound }: Props) {
+  const view = revealView(state);
   return (
     <>
-      <div className="prompt">Cards revealed</div>
+      <div className={`big ${view.tone === "points" ? "ok" : "discuss"}`} aria-live="polite">
+        {view.headline}
+      </div>
+      <div className="reason">{view.reason}</div>
+      {view.warning && (
+        <div className="warn" role="status">
+          {view.warning}
+        </div>
+      )}
+      <div className="strip" aria-label="Revealed cards">
+        {view.cards.map((c) => (
+          <div className="mini" key={c.id}>
+            <div className={`face${c.highlight ? " out" : ""}${c.noVote || c.observer ? " none" : ""}`}>
+              {c.label}
+            </div>
+            <div className="who">
+              {c.name}
+              {c.id === state.you ? " (you)" : ""}
+              {c.highlight && <span className="sr"> (lowest or highest)</span>}
+            </div>
+          </div>
+        ))}
+      </div>
       <div className="btns">
         <button className="btn primary" onClick={newRound}>
           New round
         </button>
       </div>
-      <span hidden>{state.roomId}</span>
     </>
   );
 }
