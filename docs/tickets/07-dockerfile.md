@@ -1,6 +1,6 @@
 # T7 Dockerfile
 
-Status: open
+Status: done
 Blocked by: T1
 
 Spec: docs/specs/planning-poker.md
