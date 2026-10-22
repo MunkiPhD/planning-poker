@@ -21,13 +21,13 @@ it("serves the static client over HTTP", async () => {
   expect(await res.text()).toContain("fixture-client");
 });
 
-it("accepts WebSocket connections and answers ping with pong", async () => {
+it("accepts WebSocket connections and creates a room", async () => {
   const ws = new WebSocket(`ws://localhost:${port}/ws`);
   const reply = await new Promise<string>((resolve, reject) => {
     ws.on("error", reject);
-    ws.on("open", () => ws.send(JSON.stringify({ type: "ping" })));
+    ws.on("open", () => ws.send(JSON.stringify({ type: "create_room" })));
     ws.on("message", (d) => resolve(d.toString()));
   });
   ws.close();
-  expect(JSON.parse(reply)).toEqual({ type: "pong" });
+  expect(JSON.parse(reply).type).toBe("room_created");
 });
