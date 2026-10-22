@@ -1,0 +1,18 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, system-ui, sans-serif; background: #12161c; color: #e6e9ee; min-height: 100vh; }
+.center { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 32px; gap: 12px; }
+h1 { font-size: 36px; margin: 0; }
+h2 { font-size: 18px; margin: 0 0 12px; }
+.muted { color: #7b8794; font-size: 14px; }
+.warn { color: #fcc419; font-size: 14px; }
+.room { position: absolute; top: 14px; left: 20px; font-size: 12px; color: #7b8794; }
+.room code { background: #1f2630; padding: 3px 8px; border-radius: 4px; color: #adb5bd; }
+.panel { background: #1a2029; border: 1px solid #262e3a; border-radius: 12px; padding: 24px; width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 14px; }
+.panel ul { margin: 0; padding-left: 18px; line-height: 1.8; }
+label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #adb5bd; }
+label.check { flex-direction: row; align-items: center; gap: 8px; }
+input:not([type="checkbox"]) { padding: 10px 12px; font-size: 15px; border-radius: 8px; border: 1px solid #323c4a; background: #1f2630; color: #e6e9ee; }
+input:focus-visible, .btn:focus-visible { outline: 2px solid #748ffc; outline-offset: 2px; }
+.btn { padding: 12px 26px; font-size: 15px; font-weight: 600; border-radius: 10px; border: 1px solid #323c4a; background: #1f2630; color: #e6e9ee; cursor: pointer; }
+.btn.primary { background: #4c6ef5; border-color: #4c6ef5; }
+.btn:disabled { opacity: .5; cursor: default; }

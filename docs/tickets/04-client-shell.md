@@ -1,6 +1,6 @@
 # T4 Client shell and join
 
-Status: open
+Status: done
 Blocked by: T1, T2
 
 Spec: docs/specs/planning-poker.md
