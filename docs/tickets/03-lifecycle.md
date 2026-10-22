@@ -1,6 +1,6 @@
 # T3 Lifecycle
 
-Status: open
+Status: done
 Blocked by: T2
 
 Spec: docs/specs/planning-poker.md
