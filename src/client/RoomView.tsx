@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DECK, type Card, type RoomState } from "../shared/messages";
 import type { RoomConnection } from "./connection";
 import { revealView } from "./reveal";
-import { cardLabel, roomUrl, rosterStatus } from "./roster";
+import { cardLabel, missingVotersMessage, roomUrl, rosterStatus } from "./roster";
 
 type Props = Pick<RoomConnection, "vote" | "reveal" | "newRound"> & { state: RoomState; error?: string };
 
@@ -69,6 +69,42 @@ export function CopyLinkButton({ roomId }: { roomId: string }) {
   );
 }
 
+/** Reveal button that asks for confirmation first when some voters haven't voted. */
+function RevealControl({ state, reveal }: Pick<Props, "state" | "reveal">) {
+  const [confirming, setConfirming] = useState(false);
+  const waitRef = useRef<HTMLButtonElement>(null);
+  const missing = missingVotersMessage(state);
+
+  useEffect(() => {
+    if (confirming) waitRef.current?.focus();
+  }, [confirming]);
+  // If the last vote arrives while asking, go back to the normal button (never auto-reveal).
+  useEffect(() => {
+    if (missing === null) setConfirming(false);
+  }, [missing]);
+
+  if (!confirming || missing === null) {
+    return (
+      <button className="btn primary" onClick={() => (missing === null ? reveal() : setConfirming(true))}>
+        Reveal cards
+      </button>
+    );
+  }
+  return (
+    <div className="confirm" role="alertdialog" aria-label="Reveal with missing votes" onKeyDown={(e) => e.key === "Escape" && setConfirming(false)}>
+      <div className="warn">{missing} Reveal anyway?</div>
+      <div className="btns">
+        <button ref={waitRef} className="btn primary" onClick={() => setConfirming(false)}>
+          Keep waiting
+        </button>
+        <button className="btn" onClick={reveal}>
+          Reveal anyway
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function VotingStage({ state, vote, reveal }: Props) {
   const me = state.participants.find((p) => p.id === state.you);
   const observer = me?.observer ?? false;
@@ -85,11 +121,8 @@ function VotingStage({ state, vote, reveal }: Props) {
       </div>
       {!observer && <CardPicker selected={me?.vote} onPick={vote} />}
       <div className="btns">
-        <button className="btn primary" onClick={reveal}>
-          Reveal cards
-        </button>
+        <RevealControl state={state} reveal={reveal} />
       </div>
-      {/* T6: show "N people haven't voted" warning before reveal if desired. */}
     </>
   );
 }

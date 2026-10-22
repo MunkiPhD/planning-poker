@@ -156,6 +156,8 @@ export function startServer({ port, staticDir, clock = realClock }: ServerOption
         else throw e;
       }
     });
+    // ws emits "error" (e.g. payload too large) before closing; unhandled, it would crash the process.
+    ws.on("error", () => ws.terminate());
     ws.on("close", () => release(ws));
   });
 
