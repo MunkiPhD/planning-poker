@@ -14,7 +14,9 @@ class Client {
   messages: ServerMessage[] = [];
   raw: string[] = [];
   private waiters: (() => void)[] = [];
+  closeCode?: number;
   private constructor(private ws: WebSocket) {
+    ws.on("close", (code) => (this.closeCode = code));
     ws.on("message", (d) => {
       this.raw.push(d.toString());
       this.messages.push(JSON.parse(d.toString()));
@@ -293,5 +295,40 @@ describe("clock option", () => {
       clock: { now: () => 0, setTimeout: () => 0, clearTimeout: () => {} },
     });
     await s.close();
+  });
+});
+
+describe("input limits", () => {
+  it("rejects names longer than 40 characters", async () => {
+    const room = await newRoom();
+    const c = await Client.connect();
+    c.send({ type: "join", roomId: room, name: "x".repeat(41), observer: false, token: "t" });
+    expect((await c.error()).code).toBe("bad_message");
+    c.send({ type: "join", roomId: room, name: "x".repeat(40), observer: false, token: "t" });
+    await c.state((s) => s.participants.length === 1);
+  });
+
+  it("rejects oversized tokens", async () => {
+    const room = await newRoom();
+    const c = await Client.connect();
+    c.send({ type: "join", roomId: room, name: "ann", observer: false, token: "t".repeat(201) });
+    expect((await c.error()).code).toBe("bad_message");
+  });
+
+  it("closes connections that send oversized messages", async () => {
+    const c = await Client.connect();
+    c.sendRaw(JSON.stringify({ type: "join", pad: "x".repeat(100_000) }));
+    const deadline = Date.now() + 2000;
+    while (c.closeCode === undefined && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10));
+    expect(c.closeCode).toBe(1009);
+  });
+
+  it("limits how many rooms one connection can create", async () => {
+    const c = await Client.connect();
+    for (let i = 0; i < 10; i++) c.send({ type: "create_room" });
+    await c.waitFor((m): m is Of<"room_created"> => m.type === "room_created" && c.messages.filter((x) => x.type === "room_created").length === 10);
+    const from = c.mark();
+    c.send({ type: "create_room" });
+    expect((await c.error(from)).code).toBe("rate_limited");
   });
 });

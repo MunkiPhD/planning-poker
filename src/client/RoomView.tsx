@@ -4,7 +4,7 @@ import type { RoomConnection } from "./connection";
 import { revealView } from "./reveal";
 import { cardLabel, roomUrl, rosterStatus } from "./roster";
 
-type Props = Pick<RoomConnection, "vote" | "reveal" | "newRound"> & { state: RoomState };
+type Props = Pick<RoomConnection, "vote" | "reveal" | "newRound"> & { state: RoomState; error?: string };
 
 export function CardPicker({ selected, onPick }: { selected?: Card; onPick: (c: Card) => void }) {
   return (
@@ -138,6 +138,11 @@ export function RoomView(props: Props) {
         <div className="toolbar">
           <CopyLinkButton roomId={state.roomId} />
         </div>
+        {props.error && (
+          <div className="warn" role="alert">
+            {props.error}
+          </div>
+        )}
         {state.phase === "revealed" ? <Revealed {...props} /> : <VotingStage {...props} />}
       </div>
       <Roster state={state} />

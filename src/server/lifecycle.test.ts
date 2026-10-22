@@ -42,8 +42,10 @@ const open: Client[] = [];
 
 class Client {
   messages: ServerMessage[] = [];
+  isClosed = false;
   private constructor(private ws: WebSocket) {
     ws.on("message", (d) => this.messages.push(JSON.parse(d.toString())));
+    ws.on("close", () => (this.isClosed = true));
   }
   static async connect() {
     const ws = new WebSocket(`ws://localhost:${port}/ws`);
@@ -67,6 +69,13 @@ class Client {
       const f = this.messages.slice(from).find(pred);
       if (f) return f;
       if (Date.now() > deadline) throw new Error("timeout; got " + JSON.stringify(this.messages.slice(from)));
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  }
+  async waitClosed() {
+    const deadline = Date.now() + 2000;
+    while (!this.isClosed) {
+      if (Date.now() > deadline) throw new Error("socket not closed");
       await new Promise((r) => setTimeout(r, 10));
     }
   }
@@ -160,5 +169,60 @@ describe("idle rooms", () => {
     clock.advance(8 * HOUR);
     const b = await joinAs(room, "bob");
     expect(b).toBeDefined();
+  });
+});
+
+describe("idle deletion with connected sockets", () => {
+  it("tells connected sockets room_not_found and closes them", async () => {
+    const room = await newRoom();
+    const a = await joinAs(room, "ann");
+    const from = a.messages.length;
+    clock.advance(13 * HOUR);
+    const e = await a.waitFor((m): m is Extract<ServerMessage, { type: "error" }> => m.type === "error", from);
+    expect(e.code).toBe("room_not_found");
+    await a.waitClosed();
+  });
+});
+
+describe("second join on one socket", () => {
+  it("releases the old seat so it is removed after the grace period", async () => {
+    const room = await newRoom();
+    const a = await joinAs(room, "ann");
+    const b = await joinAs(room, "bob");
+    const from = a.messages.length;
+    b.send({ type: "join", roomId: room, name: "bob2", observer: false, token: "bob2-token" });
+    const s = await a.state((s) => names(s).join() === "ann,bob,bob2", from);
+    expect(s.participants.find((p) => p.name === "bob")?.connected).toBe(false);
+    expect(s.participants.find((p) => p.name === "bob2")?.connected).toBe(true);
+    clock.advance(31 * SEC);
+    await a.state((s) => names(s).join() === "ann,bob2", from);
+  });
+
+  it("re-joining the same seat on the same socket keeps it connected", async () => {
+    const room = await newRoom();
+    const a = await joinAs(room, "ann");
+    a.send({ type: "join", roomId: room, name: "ann", observer: false, token: "ann-token" });
+    const from = a.messages.length;
+    clock.advance(60 * SEC);
+    a.send({ type: "reveal" });
+    const s = await a.state((s) => s.phase === "revealed", from);
+    expect(s.participants).toHaveLength(1);
+    expect(s.participants[0].connected).toBe(true);
+  });
+});
+
+describe("rejoin with an existing token", () => {
+  it("applies the new name and observer flag, dropping a vote when becoming an observer", async () => {
+    const room = await newRoom();
+    const a = await joinAs(room, "ann");
+    a.send({ type: "vote", card: 5 });
+    await a.state((s) => s.votedCount === 1);
+    a.close();
+    const a2 = await Client.connect();
+    a2.send({ type: "join", roomId: room, name: "Annie", observer: true, token: "ann-token" });
+    const s = await a2.state((s) => names(s).join() === "Annie");
+    expect(s.participants).toHaveLength(1);
+    expect(s.participants[0]).toMatchObject({ name: "Annie", observer: true, connected: true, hasVoted: false });
+    expect(s.voterCount).toBe(0);
   });
 });

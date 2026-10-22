@@ -64,6 +64,11 @@ export class Room {
     const existing = this.participants.find((p) => p.token === token);
     if (existing) {
       existing.connected = true;
+      existing.name = name;
+      if (existing.observer !== observer) {
+        existing.observer = observer;
+        if (observer) delete existing.vote;
+      }
       return existing.id;
     }
     const p: Participant = { id: randomUUID(), token, name, observer, connected: true };
@@ -141,7 +146,10 @@ const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 export class RoomRegistry {
   private rooms = new Map<string, Room>();
   private sweepHandle: unknown;
-  constructor(private clock: Clock) {
+  constructor(
+    private clock: Clock,
+    private onDelete: (room: Room) => void = () => {},
+  ) {
     this.scheduleSweep();
   }
 
@@ -153,7 +161,12 @@ export class RoomRegistry {
   }
 
   private sweep() {
-    for (const [id, room] of this.rooms) if (this.isIdle(room)) this.rooms.delete(id);
+    for (const [id, room] of this.rooms) {
+      if (this.isIdle(room)) {
+        this.rooms.delete(id);
+        this.onDelete(room);
+      }
+    }
   }
 
   private isIdle(room: Room) {
@@ -174,6 +187,7 @@ export class RoomRegistry {
     const room = this.rooms.get(id);
     if (room && this.isIdle(room)) {
       this.rooms.delete(id);
+      this.onDelete(room);
       return undefined;
     }
     return room;

@@ -34,7 +34,8 @@ export type ErrorCode =
   | "name_required"
   | "observer_cannot_vote"
   | "votes_locked"
-  | "invalid_card";
+  | "invalid_card"
+  | "rate_limited";
 
 export type ServerMessage =
   | { type: "room_created"; roomId: string }

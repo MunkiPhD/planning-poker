@@ -26,6 +26,10 @@ const MIME: Record<string, string> = {
 };
 
 export const DISCONNECT_GRACE_MS = 30_000;
+export const MAX_NAME_LENGTH = 40;
+export const MAX_TOKEN_LENGTH = 200;
+export const MAX_PAYLOAD_BYTES = 4096;
+export const MAX_ROOMS_PER_CONNECTION = 10;
 
 export function startServer({ port, staticDir, clock = realClock }: ServerOptions): Promise<RunningServer> {
   const httpServer = createServer(async (req, res) => {
@@ -48,8 +52,7 @@ export function startServer({ port, staticDir, clock = realClock }: ServerOption
     }
   });
 
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
-  const registry = new RoomRegistry(clock);
+  const wss = new WebSocketServer({ server: httpServer, path: "/ws", maxPayload: MAX_PAYLOAD_BYTES });
   const sessions = new Map<WebSocket, { room: Room; id: string }>();
 
   const graceTimers = new Map<string, unknown>();
@@ -63,7 +66,44 @@ export function startServer({ port, staticDir, clock = realClock }: ServerOption
     }
   };
 
+  const registry = new RoomRegistry(clock, (room) => {
+    for (const [ws, s] of [...sessions]) {
+      if (s.room !== room) continue;
+      sessions.delete(ws);
+      fail(ws, "room_not_found", "This room no longer exists. Ask for a fresh link.");
+      ws.close();
+    }
+    for (const id of room.participantIds()) {
+      const key = graceKey(room, id);
+      const h = graceTimers.get(key);
+      if (h !== undefined) clock.clearTimeout(h);
+      graceTimers.delete(key);
+    }
+  });
+
+  /** Unbinds a socket from its seat; the seat is disconnected and removed after the grace period. */
+  const release = (ws: WebSocket) => {
+    const session = sessions.get(ws);
+    sessions.delete(ws);
+    if (!session) return;
+    const stillBound = [...sessions.values()].some((s) => s.room === session.room && s.id === session.id);
+    if (stillBound) return;
+    const { room, id } = session;
+    room.setConnected(id, false);
+    const key = graceKey(room, id);
+    graceTimers.set(
+      key,
+      clock.setTimeout(() => {
+        graceTimers.delete(key);
+        room.remove(id);
+        broadcast(room);
+      }, DISCONNECT_GRACE_MS),
+    );
+    broadcast(room);
+  };
+
   wss.on("connection", (ws) => {
+    let roomsCreated = 0;
     ws.on("message", (data) => {
       let msg: ClientMessage;
       try {
@@ -74,6 +114,7 @@ export function startServer({ port, staticDir, clock = realClock }: ServerOption
       }
       try {
         if (msg.type === "create_room") {
+          if (++roomsCreated > MAX_ROOMS_PER_CONNECTION) throw new RoomError("rate_limited", "Too many rooms created");
           return send(ws, { type: "room_created", roomId: registry.create().id });
         }
         if (msg.type === "join") {
@@ -81,13 +122,17 @@ export function startServer({ port, staticDir, clock = realClock }: ServerOption
           if (!room) throw new RoomError("room_not_found", "This room no longer exists. Ask for a fresh link.");
           const name = typeof msg.name === "string" ? msg.name.trim() : "";
           if (!name) throw new RoomError("name_required", "A display name is required");
+          if (name.length > MAX_NAME_LENGTH) throw new RoomError("bad_message", `Name must be at most ${MAX_NAME_LENGTH} characters`);
           if (typeof msg.token !== "string" || !msg.token) throw new RoomError("bad_message", "Missing token");
+          if (msg.token.length > MAX_TOKEN_LENGTH) throw new RoomError("bad_message", "Token too long");
+          const prev = sessions.get(ws);
           const id = room.join(msg.token, name, msg.observer === true);
           const pending = graceTimers.get(graceKey(room, id));
           if (pending !== undefined) {
             clock.clearTimeout(pending);
             graceTimers.delete(graceKey(room, id));
           }
+          if (prev && !(prev.room === room && prev.id === id)) release(ws);
           sessions.set(ws, { room, id });
           send(ws, { type: "joined", roomId: room.id, you: id });
           return broadcast(room);
@@ -105,25 +150,7 @@ export function startServer({ port, staticDir, clock = realClock }: ServerOption
         else throw e;
       }
     });
-    ws.on("close", () => {
-      const session = sessions.get(ws);
-      sessions.delete(ws);
-      if (!session) return;
-      const stillBound = [...sessions.values()].some((s) => s.room === session.room && s.id === session.id);
-      if (stillBound) return;
-      const { room, id } = session;
-      room.setConnected(id, false);
-      const key = graceKey(room, id);
-      graceTimers.set(
-        key,
-        clock.setTimeout(() => {
-          graceTimers.delete(key);
-          room.remove(id);
-          broadcast(room);
-        }, DISCONNECT_GRACE_MS),
-      );
-      broadcast(session.room);
-    });
+    ws.on("close", () => release(ws));
   });
 
   return new Promise((resolve) => {

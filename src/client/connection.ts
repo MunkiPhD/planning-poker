@@ -7,22 +7,29 @@ export function wsUrl(): string {
   return `${proto}//${location.host}/ws`;
 }
 
+const CREATE_ROOM_TIMEOUT_MS = 10_000;
+
 /** Opens a short-lived socket, creates a room, resolves with its id. */
 export function createRoom(): Promise<string> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wsUrl());
+    const timer = setTimeout(() => fail("Timed out reaching the server"), CREATE_ROOM_TIMEOUT_MS);
+    const fail = (message: string) => {
+      clearTimeout(timer);
+      ws.close();
+      reject(new Error(message));
+    };
     ws.onopen = () => ws.send(JSON.stringify({ type: "create_room" } satisfies ClientMessage));
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data) as ServerMessage;
       if (m.type === "room_created") {
+        clearTimeout(timer);
         ws.close();
         resolve(m.roomId);
-      } else if (m.type === "error") {
-        ws.close();
-        reject(new Error(m.message));
-      }
+      } else if (m.type === "error") fail(m.message);
     };
-    ws.onerror = () => reject(new Error("Could not reach the server"));
+    ws.onerror = () => fail("Could not reach the server");
+    ws.onclose = () => fail("Connection closed before the room was created");
   });
 }
 

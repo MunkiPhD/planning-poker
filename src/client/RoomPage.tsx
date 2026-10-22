@@ -51,7 +51,7 @@ export function RoomPage({ roomId }: { roomId: string }) {
       </div>
     );
   } else if (conn.state) {
-    body = <RoomView state={conn.state} vote={conn.vote} reveal={conn.reveal} newRound={conn.newRound} />;
+    body = <RoomView state={conn.state} vote={conn.vote} reveal={conn.reveal} newRound={conn.newRound} error={conn.error?.message} />;
   } else if (conn.status !== "open" || conn.rejoining) {
     body = <p className="muted">{conn.status === "reconnecting" ? "Reconnecting..." : "Connecting..."}</p>;
   } else {
