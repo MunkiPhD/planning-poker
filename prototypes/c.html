@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Planning Poker – Prototype C (Focus mode)</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, system-ui, sans-serif; background: #12161c; color: #e6e9ee; min-height: 100vh; }
+  .layout { display: flex; min-height: calc(100vh - 150px); }
+  .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; }
+  .side { width: 220px; background: #1a2029; padding: 20px 16px; border-left: 1px solid #262e3a; }
+  .side h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #7b8794; margin: 0 0 12px; }
+  .person { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; font-size: 14px; }
+  .person .dot { font-size: 14px; }
+  .dot.voted { color: #51cf66; }
+  .dot.wait { color: #495057; }
+  .dot.obs { color: #7b8794; font-size: 11px; }
+  .room { position: absolute; top: 14px; left: 20px; font-size: 12px; color: #7b8794; }
+  .room code { background: #1f2630; padding: 3px 8px; border-radius: 4px; color: #adb5bd; }
+  .prompt { font-size: 20px; margin-bottom: 8px; }
+  .sub { font-size: 14px; color: #7b8794; margin-bottom: 32px; }
+  .picker { display: grid; grid-template-columns: repeat(7, 96px); gap: 14px; }
+  .card { height: 140px; border-radius: 14px; border: 2px solid #323c4a; background: #1f2630; color: #e6e9ee; font-size: 38px; font-weight: 700; cursor: pointer; transition: transform .1s, border-color .1s; }
+  .card:hover { border-color: #748ffc; transform: translateY(-4px); }
+  .card.selected { background: #4c6ef5; border-color: #748ffc; transform: translateY(-10px); }
+  .big { font-size: 120px; font-weight: 800; line-height: 1; }
+  .big.ok { color: #51cf66; }
+  .big.discuss { color: #fcc419; font-size: 84px; }
+  .reason { font-size: 15px; color: #adb5bd; margin: 12px 0 28px; }
+  .strip { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-bottom: 32px; }
+  .mini { text-align: center; }
+  .mini .face { width: 64px; height: 90px; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; border-radius: 10px; background: #1f2630; border: 2px solid #323c4a; }
+  .mini .face.out { border-color: #fcc419; background: #3b3210; }
+  .mini .face.none { color: #495057; font-size: 12px; font-weight: 400; }
+  .mini .who { font-size: 12px; color: #adb5bd; margin-top: 6px; }
+  .warn { color: #fcc419; font-size: 14px; margin-bottom: 20px; }
+  .btn { padding: 12px 26px; font-size: 15px; font-weight: 600; border-radius: 10px; border: 1px solid #323c4a; background: #1f2630; color: #e6e9ee; cursor: pointer; }
+  .btn.primary { background: #4c6ef5; border-color: #4c6ef5; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btns { display: flex; gap: 12px; margin-top: 32px; }
+  .proto { margin: 0 20px 20px; padding: 14px 20px; border: 2px dashed #3b4656; border-radius: 10px; font-size: 13px; }
+  .proto strong { display: block; margin-bottom: 8px; color: #7b8794; text-transform: uppercase; font-size: 11px; letter-spacing: .05em; }
+  .proto button { margin: 0 6px 6px 0; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="room">Room: <code>https://poker.example.com/r/k3x9fq</code></div>
+<div class="layout" id="app"></div>
+<div class="proto">
+  <strong>Prototype controls (not part of the real UI)</strong>
+  <button data-act="rand">Teammates vote (random)</button>
+  <button data-act="agree">Scenario: all agree (3, 5, 3, 3)</button>
+  <button data-act="discuss">Scenario: discuss (3, 5, 3, 8)</button>
+  <button data-act="missing">Scenario: two teammates haven't voted</button>
+  <button data-act="wide">Scenario: 8 and 13 together</button>
+  <button data-act="allcoffee">Scenario: everyone coffee</button>
+</div>
+
+<script>
+const CARDS = ['1', '2', '3', '5', '8', '13', '☕'];
+const SEQ = [1, 2, 3, 5, 8, 13];
+const state = {
+  revealed: false,
+  players: [
+    { name: 'You', me: true, vote: null },
+    { name: 'Alice', vote: null },
+    { name: 'Bob', vote: null },
+    { name: 'Carlos', vote: null },
+    { name: 'Dana', vote: null },
+    { name: 'Evan', observer: true, vote: null },
+  ],
+};
+
+function computeResult(players) {
+  const nums = players.filter(p => !p.observer && p.vote && p.vote !== '☕').map(p => Number(p.vote));
+  if (!nums.length) return { discuss: true, reason: 'No numeric votes' };
+  const idx = nums.map(n => SEQ.indexOf(n));
+  const lo = Math.min(...idx), hi = Math.max(...idx);
+  if (hi - lo <= 1) return { points: SEQ[hi] };
+  return { discuss: true, lo: SEQ[lo], hi: SEQ[hi], reason: `${SEQ[lo]} to ${SEQ[hi]} is ${hi - lo} steps apart. Start with the highlighted cards.` };
+}
+
+function render() {
+  const me = state.players[0];
+  const voters = state.players.filter(p => !p.observer);
+  const missing = voters.filter(p => !p.vote);
+  const res = computeResult(state.players);
+
+  const side = state.players.map(p => {
+    const dot = p.observer ? '<span class="dot obs">observing</span>'
+      : p.vote ? '<span class="dot voted">●</span>' : '<span class="dot wait">○</span>';
+    return `<div class="person"><span>${p.name}${p.me ? ' (you)' : ''}</span>${dot}</div>`;
+  }).join('');
+
+  let stage;
+  if (!state.revealed) {
+    const done = voters.length - missing.length;
+    stage = `
+      <div class="prompt">${me.vote ? 'Vote cast. Tap another card to change it.' : 'Pick your card'}</div>
+      <div class="sub">${done} of ${voters.length} voted</div>
+      <div class="picker">${CARDS.map(c => `<button class="card ${me.vote === c ? 'selected' : ''}" data-card="${c}">${c}</button>`).join('')}</div>
+      <div class="btns"><button class="btn primary" data-act="reveal">Reveal cards</button></div>`;
+  } else {
+    const strip = voters.map(p => {
+      const out = res.discuss && res.lo && p.vote && p.vote !== '☕' && (Number(p.vote) === res.lo || Number(p.vote) === res.hi);
+      const face = p.vote ? `<div class="face ${out ? 'out' : ''}">${p.vote}</div>` : '<div class="face none">no vote</div>';
+      return `<div class="mini">${face}<div class="who">${p.name}</div></div>`;
+    }).join('');
+    stage = `
+      ${res.points ? `<div class="big ok">${res.points}</div><div class="reason">Story points</div>`
+                   : `<div class="big discuss">Discuss</div><div class="reason">${res.reason}</div>`}
+      ${missing.length ? `<div class="warn">${missing.length} ${missing.length === 1 ? 'person hasn\'t' : 'people haven\'t'} voted</div>` : ''}
+      <div class="strip">${strip}</div>
+      <div class="btns"><button class="btn primary" data-act="new">New round</button></div>`;
+  }
+
+  document.getElementById('app').innerHTML = `
+    <div class="stage">${stage}</div>
+    <aside class="side"><h2>In the room</h2>${side}</aside>`;
+}
+
+function setTeammates(votes, stagger) {
+  const mates = state.players.filter(p => !p.me && !p.observer);
+  mates.forEach((p, i) => {
+    setTimeout(() => { if (!state.revealed) { p.vote = votes[i] ?? null; render(); } }, stagger ? i * 500 : 0);
+  });
+}
+function newRound() { state.revealed = false; state.players.forEach(p => p.vote = null); render(); }
+
+document.addEventListener('click', e => {
+  const card = e.target.closest('[data-card]');
+  if (card && !state.revealed) { state.players[0].vote = card.dataset.card; render(); return; }
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (!act) return;
+  if (act === 'reveal') { state.revealed = true; render(); }
+  else if (act === 'new') newRound();
+  else {
+    if (state.revealed) newRound();
+    if (act === 'rand') setTeammates([0, 1, 2, 3].map(() => CARDS[Math.floor(Math.random() * 6)]), true);
+    if (act === 'agree') setTeammates(['3', '5', '3', '3'], true);
+    if (act === 'discuss') setTeammates(['3', '5', '3', '8'], true);
+    if (act === 'missing') setTeammates(['5', '5', null, null], true);
+    if (act === 'wide') setTeammates(['8', '13', '8', '13'], true);
+    if (act === 'allcoffee') { state.players[0].vote = '☕'; setTeammates(['☕', '☕', '☕', '☕'], true); render(); }
+  }
+});
+render();
+</script>
+</body>
+</html>
